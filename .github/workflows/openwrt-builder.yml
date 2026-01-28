@@ -74,27 +74,19 @@ jobs:
       id: package
       run: |
         cd openwrt
-        # 1. 先让官方脚本跑一遍，补全基础依赖
+        # 开启开发者模式，否则很多内核选项选不上
+        echo "CONFIG_DEVEL=y" >> .config
         make defconfig
         
-        # 2. 【核心修复】强行修改 defconfig 生成的最终配置文件
-        # 使用 sed 替换已存在的“未设置”项
-        sed -i 's/# CONFIG_KERNEL_DEBUG_INFO_BTF is not set/CONFIG_KERNEL_DEBUG_INFO_BTF=y/' .config
-        sed -i 's/# CONFIG_KERNEL_DEBUG_INFO is not set/CONFIG_KERNEL_DEBUG_INFO=y/' .config
+        # 强制在顶层关闭 REDUCED，开启 BTF
+        sed -i 's/CONFIG_KERNEL_DEBUG_INFO_REDUCED=y/CONFIG_KERNEL_DEBUG_INFO_REDUCED=n/' .config
+        echo "CONFIG_KERNEL_DEBUG_INFO=y" >> .config
+        echo "CONFIG_KERNEL_DEBUG_INFO_BTF=y" >> .config
         
-        # 使用 echo 追加必要的 eBPF 扩展开关
-        {
-          echo 'CONFIG_KERNEL_DEBUG_INFO_BTF_MODULES=y'
-          echo 'CONFIG_KERNEL_KPROBES=y'
-          echo 'CONFIG_KERNEL_KPROBE_EVENTS=y'
-          echo 'CONFIG_KERNEL_BPF_EVENTS=y'
-        } >> .config
-        
-        # 3. 强制分区大小 (防止回滚)
+        # 强制分区扩容 (确保新内核塞得下)
         sed -i 's/CONFIG_TARGET_KERNEL_PARTSIZE=.*/CONFIG_TARGET_KERNEL_PARTSIZE=64/' .config
         sed -i 's/CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=512/' .config
         
-        # 4. 预下载源码，减少后续编译失败率
         make download -j8
 
     - name: Compile the firmware
