@@ -1,4 +1,4 @@
-name: OpenWrt 24.10 Builder (Official eBPF)
+name: OpenWrt 24.10 Builder (J4125 eBPF Optimized)
 
 on:
   repository_dispatch:
@@ -29,6 +29,7 @@ jobs:
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
         sudo docker image prune --all --force
         sudo -E apt-get -qq update
+        # 核心依赖：增加 dwarves 用于 BTF 生成
         sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev dwarves
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
@@ -44,24 +45,37 @@ jobs:
 
     - name: Load custom feeds
       run: |
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+        if [ -f "$FEEDS_CONF" ]; then
+            mv "$FEEDS_CONF" openwrt/feeds.conf.default
+            echo "Successfully loaded custom feeds."
+        else
+            echo "Custom feeds file not found, skipping."
+        fi
 
     - name: Update/Install feeds
       run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
 
     - name: Load custom configuration
       run: |
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
+        if [ -f "$CONFIG_FILE" ]; then
+            mv "$CONFIG_FILE" openwrt/.config
+            echo "Successfully loaded custom .config."
+        else
+            echo "Warning: .config not found in root, using defaults."
+        fi
+        
+        if [ -f "$DIY_P2_SH" ]; then
+            chmod +x "$DIY_P2_SH"
+            cd openwrt
+            "$GITHUB_WORKSPACE/$DIY_P2_SH"
+        fi
 
     - name: Download package
       id: package
       run: |
         cd openwrt
         make defconfig
-        # 【关键修复】在 defconfig 之后强制写入分区扩容，防止配置回滚
+        # 再次强制写入分区大小，确保在 defconfig 后不回滚
         sed -i 's/CONFIG_TARGET_KERNEL_PARTSIZE=.*/CONFIG_TARGET_KERNEL_PARTSIZE=64/' .config
         sed -i 's/CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=512/' .config
         make download -j8
