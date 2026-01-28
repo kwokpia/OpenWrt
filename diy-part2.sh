@@ -1,38 +1,33 @@
 #!/bin/bash
 
-# 1. 自动定位内核配置文件 (24.10 通常使用 6.6 或更高级内核)
+# 1. 自动定位内核配置文件
 KCONFIG=$(find target/linux/x86/config-* -maxdepth 0 | head -n 1)
 echo "正在注入 eBPF 特性到 24.10 内核配置: $KCONFIG"
 
-# 2. 强制开启 Kprobes 和事件追踪
-sed -i '/CONFIG_KPROBES/d' "$KCONFIG"
-echo 'CONFIG_KPROBES=y' >> "$KCONFIG"
-echo 'CONFIG_KPROBE_EVENTS=y' >> "$KCONFIG"
-echo 'CONFIG_BPF_EVENTS=y' >> "$KCONFIG"
+# 2. 注入 eBPF/BTF 必要内核开关 (使用追加模式)
+{
+    echo 'CONFIG_KPROBES=y'
+    echo 'CONFIG_KPROBE_EVENTS=y'
+    echo 'CONFIG_BPF_EVENTS=y'
+    echo 'CONFIG_DEBUG_INFO_BTF=y'
+    echo 'CONFIG_DEBUG_INFO_BTF_MODULES=y'
+    echo 'CONFIG_BPF_SYSCALL=y'
+    echo 'CONFIG_BPF_JIT=y'
+    echo 'CONFIG_BPF_JIT_ALWAYS_ON=y'
+    echo 'CONFIG_DEBUG_INFO=y'
+    echo 'CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT=y'
+} >> "$KCONFIG"
 
-# 3. 开启 BTF (24.10 运行现代化 BPF 程序的基石)
-sed -i '/CONFIG_DEBUG_INFO_BTF/d' "$KCONFIG"
-echo 'CONFIG_DEBUG_INFO_BTF=y' >> "$KCONFIG"
-echo 'CONFIG_DEBUG_INFO_BTF_MODULES=y' >> "$KCONFIG"
-
-# 4. 开启 BPF 进阶支持
-echo 'CONFIG_BPF_SYSCALL=y' >> "$KCONFIG"
-echo 'CONFIG_BPF_JIT=y' >> "$KCONFIG"
-echo 'CONFIG_BPF_JIT_ALWAYS_ON=y' >> "$KCONFIG"
-echo 'CONFIG_HAVE_EBPF_JIT=y' >> "$KCONFIG"
-
-# 5. 开启 DWARF 调试信息（BTF 生成的先决条件）
-echo 'CONFIG_DEBUG_INFO=y' >> "$KCONFIG"
-echo 'CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT=y' >> "$KCONFIG"
-
-
-# 6. 扩容内核分区 (针对 J4125 建议扩至 64MB)
+# 3. 扩容分区 (BTF 会显著增大内核体积，必须扩容)
+# 将内核分区从默认的 16MB 扩容至 64MB
 sed -i 's/CONFIG_TARGET_KERNEL_PARTSIZE=16/CONFIG_TARGET_KERNEL_PARTSIZE=64/' .config
+# 将根文件系统分区扩容至 512MB (方便以后折腾)
+sed -i 's/CONFIG_TARGET_ROOTFS_PARTSIZE=104/CONFIG_TARGET_ROOTFS_PARTSIZE=512/' .config
 
-# 确保 irqbalance 默认开启
+# 4. 确保 irqbalance 服务默认启动
 echo "service irqbalance start" >> package/base-files/files/etc/rc.local
 
-# 强力剔除无线相关包
-sed -i 's/CONFIG_PACKAGE_wpad-basic-mbedtls=y/# CONFIG_PACKAGE_wpad-basic-mbedtls is not set/' .config
-sed -i 's/CONFIG_PACKAGE_wpad-basic-openssl=y/# CONFIG_PACKAGE_wpad-basic-openssl is not set/' .config
-sed -i 's/CONFIG_PACKAGE_iw=y/# CONFIG_PACKAGE_iw is not set/' .config
+# 5. 强力清理无线组件 (防止 feeds 自动补全)
+sed -i '/wpad/d' .config
+sed -i '/hostapd/d' .config
+sed -i '/iwinfo/d' .config
