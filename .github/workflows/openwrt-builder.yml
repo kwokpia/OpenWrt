@@ -1,4 +1,4 @@
-name: OpenWrt 24.10 Builder (Official eBPF)
+name: OpenWrt 24.10 Builder (Optimized for J4125 & eBPF)
 
 on:
   repository_dispatch:
@@ -26,21 +26,33 @@ jobs:
     - name: Maximize build space
       uses: easimon/maximize-build-space@master
       with:
-        root-reserve-mb: 512
-        swap-size-mb: 4096  # 增加 4GB 虚拟内存防止编译 BTF 时 OOM
+        root-reserve-mb: 2048
+        swap-size-mb: 5120   # 增加到 5GB Swap，确保 BTF 转换不崩溃
         remove-dotnet: 'true'
         remove-android: 'true'
         remove-codeql: 'true'
+        remove-haskell: 'true'
 
     - name: Initialization environment
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-        sudo docker image prune --all --force
+        # 彻底清理没用的庞大目录
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        
         sudo -E apt-get -qq update
-        # 核心依赖：增加 dwarves (含pahole) 用于 BTF 生成，libelf 用于 BPF 编译
-        sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev dwarves
+        
+        # 优化后的安装列表：去掉了会拉取 texlive 的 asciidoc, xmlto, antlr3
+        # 保留了 dwarves (含pahole) 和 libelf-dev 用于 BTF
+        sudo -E apt-get -qq install \
+          build-essential libncurses5-dev libncursesw5-dev \
+          zlib1g-dev gawk git gettext libssl-dev xsltproc \
+          rsync swig unzip quilt m4 bzip2 wget curl \
+          libelf-dev python3 python3-pyelftools dwarves \
+          g++-multilib gcc-multilib binutils-dev patch \
+          flex bison autoconf automake libtool make \
+          p7zip p7zip-full device-tree-compiler xxd
+          
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
@@ -76,12 +88,15 @@ jobs:
         cd openwrt
         make defconfig
         make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
 
     - name: Compile the firmware
       id: compile
       run: |
         cd openwrt
-        # 首次尝试多线程，失败则进入单线程模式方便报错排查
+        echo -e "$(nproc) thread compile"
+        # 第一次尝试多线程，失败则进入单线程模式方便报错排查
         make -j$(nproc) || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         echo "FILE_DATE=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_ENV
@@ -101,5 +116,5 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: OpenWrt_24.10_J4125_${{ env.FILE_DATE }} 
+        tag_name: OpenWrt_24.10_J4125_${{ env.FILE_DATE }}
         files: ${{ env.FIRMWARE }}/*
