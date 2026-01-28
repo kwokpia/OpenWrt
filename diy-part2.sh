@@ -28,3 +28,6 @@ echo 'CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT=y' >> "$KCONFIG"
 
 # 6. 扩容内核分区 (针对 J4125 建议扩至 64MB)
 sed -i 's/CONFIG_TARGET_KERNEL_PARTSIZE=16/CONFIG_TARGET_KERNEL_PARTSIZE=64/' .config
+
+# 确保 irqbalance 默认开启
+echo "service irqbalance start" >> package/base-files/files/etc/rc.local
