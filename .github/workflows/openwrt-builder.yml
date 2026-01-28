@@ -23,6 +23,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@main
 
+    - name: Maximize build space
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 512
+        swap-size-mb: 4096  # 增加 4GB 虚拟内存防止编译 BTF 时 OOM
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-codeql: 'true'
+
     - name: Initialization environment
       env:
         DEBIAN_FRONTEND: noninteractive
