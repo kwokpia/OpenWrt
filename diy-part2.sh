@@ -31,3 +31,8 @@ sed -i 's/CONFIG_TARGET_KERNEL_PARTSIZE=16/CONFIG_TARGET_KERNEL_PARTSIZE=64/' .c
 
 # 确保 irqbalance 默认开启
 echo "service irqbalance start" >> package/base-files/files/etc/rc.local
+
+# 强力剔除无线相关包
+sed -i 's/CONFIG_PACKAGE_wpad-basic-mbedtls=y/# CONFIG_PACKAGE_wpad-basic-mbedtls is not set/' .config
+sed -i 's/CONFIG_PACKAGE_wpad-basic-openssl=y/# CONFIG_PACKAGE_wpad-basic-openssl is not set/' .config
+sed -i 's/CONFIG_PACKAGE_iw=y/# CONFIG_PACKAGE_iw is not set/' .config
