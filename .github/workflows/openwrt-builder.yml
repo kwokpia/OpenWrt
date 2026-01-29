@@ -45,12 +45,20 @@ jobs:
 
     - name: Load custom feeds
       run: |
+        # 1. 优先处理自定义 feeds（如果有）
         if [ -f "$FEEDS_CONF" ]; then
             mv "$FEEDS_CONF" openwrt/feeds.conf.default
-            echo "Successfully loaded custom feeds."
-        else
-            echo "Custom feeds file not found, skipping."
         fi
+        
+        cd openwrt
+        # 2. 【核心修复】将所有 git.openwrt.org 链接替换为 GitHub 镜像
+        # 这样做能绕过官方服务器的 503 错误，编译会变得非常顺滑
+        sed -i 's|https://git.openwrt.org/feed/packages|https://github.com/openwrt/packages|g' feeds.conf.default
+        sed -i 's|https://git.openwrt.org/project/luci|https://github.com/openwrt/luci|g' feeds.conf.default
+        sed -i 's|https://git.openwrt.org/feed/routing|https://github.com/openwrt/routing|g' feeds.conf.default
+        sed -i 's|https://git.openwrt.org/feed/telephony|https://github.com/openwrt/telephony|g' feeds.conf.default
+        
+        echo "已成功将源地址切换至 GitHub 镜像。"
 
     - name: Update/Install feeds
       run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
