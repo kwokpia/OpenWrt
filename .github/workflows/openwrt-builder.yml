@@ -74,21 +74,18 @@ jobs:
       id: package
       run: |
         cd openwrt
-        # 开启开发者模式，这是 BTF 的最高指令
+        # 开启开发者模式
         echo "CONFIG_DEVEL=y" >> .config
-        echo "CONFIG_KERNEL_DEBUG_INFO=y" >> .config
-        echo "CONFIG_KERNEL_DEBUG_INFO_BTF=y" >> .config
         
-        # 1. 第一次同步，补全基础
+        # 第一次同步
         make defconfig
         
-        # 2. 注入分区扩容
+        # 强制分区大小
         sed -i 's/CONFIG_TARGET_KERNEL_PARTSIZE=.*/CONFIG_TARGET_KERNEL_PARTSIZE=64/' .config
         sed -i 's/CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=512/' .config
         
-        # 3. 【关键】使用非交互式 oldconfig 消除同步警告并锁死配置
-        # 这步会根据内核模板的变化重新同步 .config
-        make oldconfig
+        # 【关键修复】使用 yes 命令自动处理所有可能的内核询问
+        yes "" | make oldconfig
         
         make download -j8
 
