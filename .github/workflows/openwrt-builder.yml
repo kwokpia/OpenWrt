@@ -82,19 +82,23 @@ jobs:
       id: package
       run: |
         cd openwrt
-        # 开启开发者模式
         echo "CONFIG_DEVEL=y" >> .config
-        
-        # 第一次同步
         make defconfig
+        
+        # --- 核心修正：禁止 OpenWrt 剥离内核导出符号 ---
+        # 这一步是防止 BTF 段在打包镜像时被删掉的关键
+        sed -i 's/CONFIG_STRIP_KERNEL_EXPORTS=y/CONFIG_STRIP_KERNEL_EXPORTS=n/' .config
+        echo "CONFIG_KERNEL_KALLSYMS=y" >> .config
+        echo "CONFIG_KERNEL_DEBUG_INFO_BTF=y" >> .config
+        
+        # 补全之前的内核选项
+        sed -i 's/CONFIG_KERNEL_DEBUG_INFO_REDUCED=y/CONFIG_KERNEL_DEBUG_INFO_REDUCED=n/' .config
         
         # 强制分区大小
         sed -i 's/CONFIG_TARGET_KERNEL_PARTSIZE=.*/CONFIG_TARGET_KERNEL_PARTSIZE=64/' .config
         sed -i 's/CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=512/' .config
         
-        # 【关键修复】使用 yes 命令自动处理所有可能的内核询问
         yes "" | make oldconfig
-        
         make download -j8
 
     - name: Compile the firmware
