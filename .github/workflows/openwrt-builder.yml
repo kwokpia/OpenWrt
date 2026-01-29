@@ -74,29 +74,14 @@ jobs:
       id: package
       run: |
         cd openwrt
-        # 1. 强制开启开发者模式和底层内核调试（这是所有后续配置合法的基石）
         echo "CONFIG_DEVEL=y" >> .config
-        echo "CONFIG_KERNEL_DEBUG_INFO=y" >> .config
-        
-        # 2. 第一次同步：让系统接受上述基本设定
         make defconfig
         
-        # 3. 【核心修复】在 defconfig 之后，强行修正被回滚的 BTF 选项
-        # 务必关闭 REDUCED，开启 BTF 和 BPF 事件
+        # 针对 24.10 的特殊补丁：强制开启内核 BTF 宏定义
         sed -i 's/CONFIG_KERNEL_DEBUG_INFO_REDUCED=y/CONFIG_KERNEL_DEBUG_INFO_REDUCED=n/' .config
-        sed -i 's/# CONFIG_KERNEL_DEBUG_INFO_BTF is not set/CONFIG_KERNEL_DEBUG_INFO_BTF=y/' .config
-        {
-          echo 'CONFIG_KERNEL_DEBUG_INFO_BTF_MODULES=y'
-          echo 'CONFIG_KERNEL_KPROBES=y'
-          echo 'CONFIG_KERNEL_KPROBE_EVENTS=y'
-          echo 'CONFIG_KERNEL_BPF_EVENTS=y'
-        } >> .config
+        echo "CONFIG_KERNEL_DEBUG_INFO_BTF=y" >> .config
         
-        # 4. 第二次同步（关键！）：这一步是为了消除你看到的 "out of sync" 警告
-        # 它会验证你的修改并更新系统索引。如果修改合法，它会保持 y；如果缺失依赖，它才会报错。
-        make defconfig
-        
-        # 5. 强制分区扩容
+        # 强制分区大小
         sed -i 's/CONFIG_TARGET_KERNEL_PARTSIZE=.*/CONFIG_TARGET_KERNEL_PARTSIZE=64/' .config
         sed -i 's/CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=512/' .config
         
